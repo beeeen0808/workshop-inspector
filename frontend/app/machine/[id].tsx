@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -249,27 +250,43 @@ export default function MachineDetail() {
     try {
       const html = generateAllInspectionsPDF();
       
-      const { uri } = await Print.printToFileAsync({
-        html,
-        base64: false,
-      });
-
-      const fileName = `${machine.name.replace(/[^a-zA-Z0-9]/g, '_')}_All_Inspections_${new Date().toISOString().split('T')[0]}.pdf`;
-      const newUri = `${FileSystem.documentDirectory}${fileName}`;
-      
-      await FileSystem.moveAsync({
-        from: uri,
-        to: newUri,
-      });
-
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(newUri, {
-          mimeType: 'application/pdf',
-          dialogTitle: 'Export All Inspections',
-          UTI: 'com.adobe.pdf',
-        });
+      if (Platform.OS === 'web') {
+        // For web: Open print dialog which allows saving as PDF
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(html);
+          printWindow.document.close();
+          printWindow.focus();
+          setTimeout(() => {
+            printWindow.print();
+          }, 250);
+        } else {
+          Alert.alert('Error', 'Please allow pop-ups to export PDF');
+        }
       } else {
-        Alert.alert('Success', `PDF saved to: ${newUri}`);
+        // For mobile: Use expo-print and expo-sharing
+        const { uri } = await Print.printToFileAsync({
+          html,
+          base64: false,
+        });
+
+        const fileName = `${machine.name.replace(/[^a-zA-Z0-9]/g, '_')}_All_Inspections_${new Date().toISOString().split('T')[0]}.pdf`;
+        const newUri = `${FileSystem.documentDirectory}${fileName}`;
+        
+        await FileSystem.moveAsync({
+          from: uri,
+          to: newUri,
+        });
+
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(newUri, {
+            mimeType: 'application/pdf',
+            dialogTitle: 'Export All Inspections',
+            UTI: 'com.adobe.pdf',
+          });
+        } else {
+          Alert.alert('Success', `PDF saved to: ${newUri}`);
+        }
       }
     } catch (error) {
       console.log('Export error:', error);
