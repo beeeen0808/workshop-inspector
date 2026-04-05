@@ -21,6 +21,7 @@ interface CheckItemInput {
   text: string;
   check_type: 'yesno' | 'multiple_choice';
   options: string[];
+  default_response: string;
 }
 
 export default function NewTemplate() {
@@ -39,6 +40,7 @@ export default function NewTemplate() {
         text: '',
         check_type: 'yesno',
         options: ['Good', 'Fair', 'Poor'],
+        default_response: '',
       },
     ]);
   };
@@ -80,6 +82,7 @@ export default function NewTemplate() {
           text: item.text.trim(),
           check_type: item.check_type,
           options: item.check_type === 'multiple_choice' ? item.options : undefined,
+          default_response: item.default_response || undefined,
         })),
       });
       router.back();
@@ -223,6 +226,69 @@ export default function NewTemplate() {
                     }}
                   />
                 )}
+
+                {/* Default Answer Selector */}
+                <View style={styles.defaultAnswerSection}>
+                  <Text style={styles.defaultAnswerLabel}>Default Answer (optional)</Text>
+                  <View style={styles.defaultAnswerOptions}>
+                    <TouchableOpacity
+                      style={[
+                        styles.defaultAnswerOption,
+                        !item.default_response && styles.defaultAnswerOptionActive,
+                      ]}
+                      onPress={() => updateCheckItem(item.id, { default_response: '' })}
+                    >
+                      <Text style={[
+                        styles.defaultAnswerOptionText,
+                        !item.default_response && styles.defaultAnswerOptionTextActive,
+                      ]}>None</Text>
+                    </TouchableOpacity>
+                    {item.check_type === 'yesno' ? (
+                      <>
+                        <TouchableOpacity
+                          style={[
+                            styles.defaultAnswerOption,
+                            item.default_response === 'yes' && styles.defaultAnswerOptionActive,
+                          ]}
+                          onPress={() => updateCheckItem(item.id, { default_response: 'yes' })}
+                        >
+                          <Text style={[
+                            styles.defaultAnswerOptionText,
+                            item.default_response === 'yes' && styles.defaultAnswerOptionTextActive,
+                          ]}>Yes</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.defaultAnswerOption,
+                            item.default_response === 'no' && styles.defaultAnswerOptionActive,
+                          ]}
+                          onPress={() => updateCheckItem(item.id, { default_response: 'no' })}
+                        >
+                          <Text style={[
+                            styles.defaultAnswerOptionText,
+                            item.default_response === 'no' && styles.defaultAnswerOptionTextActive,
+                          ]}>No</Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      item.options.map((option) => (
+                        <TouchableOpacity
+                          key={option}
+                          style={[
+                            styles.defaultAnswerOption,
+                            item.default_response === option && styles.defaultAnswerOptionActive,
+                          ]}
+                          onPress={() => updateCheckItem(item.id, { default_response: option })}
+                        >
+                          <Text style={[
+                            styles.defaultAnswerOptionText,
+                            item.default_response === option && styles.defaultAnswerOptionTextActive,
+                          ]}>{option}</Text>
+                        </TouchableOpacity>
+                      ))
+                    )}
+                  </View>
+                </View>
               </View>
             ))}
 
@@ -423,6 +489,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#475569',
     marginTop: 4,
+  },
+  defaultAnswerSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+  },
+  defaultAnswerLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    marginBottom: 8,
+  },
+  defaultAnswerOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  defaultAnswerOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#0f172a',
+  },
+  defaultAnswerOptionActive: {
+    backgroundColor: '#10b98130',
+  },
+  defaultAnswerOptionText: {
+    fontSize: 13,
+    color: '#64748b',
+  },
+  defaultAnswerOptionTextActive: {
+    color: '#10b981',
+    fontWeight: '500',
   },
   createButton: {
     flexDirection: 'row',

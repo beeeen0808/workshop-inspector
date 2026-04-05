@@ -12,6 +12,7 @@ export interface Machine {
   category: 'woodworking' | 'metalworking';
   description?: string;
   location?: string;
+  default_template_id?: string;
   qr_code_data: string;
   created_by: string;
   created_at: string;
@@ -23,6 +24,7 @@ export interface CheckItem {
   text: string;
   check_type: 'yesno' | 'multiple_choice';
   options?: string[];
+  default_response?: string;
 }
 
 export interface ChecklistTemplate {

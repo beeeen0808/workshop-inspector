@@ -67,12 +67,14 @@ class MachineCreate(BaseModel):
     category: str  # woodworking, metalworking
     description: Optional[str] = None
     location: Optional[str] = None
+    default_template_id: Optional[str] = None  # Default checklist for this machine
 
 class MachineUpdate(BaseModel):
     name: Optional[str] = None
     category: Optional[str] = None
     description: Optional[str] = None
     location: Optional[str] = None
+    default_template_id: Optional[str] = None
 
 class MachineResponse(BaseModel):
     machine_id: str
@@ -80,6 +82,7 @@ class MachineResponse(BaseModel):
     category: str
     description: Optional[str] = None
     location: Optional[str] = None
+    default_template_id: Optional[str] = None
     qr_code_data: str
     created_by: str
     created_at: datetime
@@ -89,6 +92,7 @@ class CheckItemCreate(BaseModel):
     text: str
     check_type: str  # "yesno" or "multiple_choice"
     options: Optional[List[str]] = None  # For multiple choice
+    default_response: Optional[str] = None  # Default answer for this check
 
 class ChecklistTemplateCreate(BaseModel):
     name: str
@@ -391,6 +395,7 @@ async def create_machine(
         "category": machine.category,
         "description": machine.description,
         "location": machine.location,
+        "default_template_id": machine.default_template_id,
         "qr_code_data": qr_code_data,
         "created_by": current_user["user_id"],
         "created_at": datetime.now(timezone.utc),
@@ -442,7 +447,18 @@ async def update_machine(
     if not machine:
         raise HTTPException(status_code=404, detail="Machine not found")
     
-    update_data = {k: v for k, v in machine_update.dict().items() if v is not None}
+    update_data = {}
+    if machine_update.name is not None:
+        update_data["name"] = machine_update.name
+    if machine_update.category is not None:
+        update_data["category"] = machine_update.category
+    if machine_update.description is not None:
+        update_data["description"] = machine_update.description
+    if machine_update.location is not None:
+        update_data["location"] = machine_update.location
+    if machine_update.default_template_id is not None:
+        update_data["default_template_id"] = machine_update.default_template_id
+    
     update_data["updated_at"] = datetime.now(timezone.utc)
     
     await db.machines.update_one(
@@ -478,7 +494,8 @@ async def create_template(
             "check_id": f"check_{uuid.uuid4().hex[:8]}",
             "text": item.text,
             "check_type": item.check_type,
-            "options": item.options if item.check_type == "multiple_choice" else None
+            "options": item.options if item.check_type == "multiple_choice" else None,
+            "default_response": item.default_response
         })
     
     template_doc = {
@@ -541,7 +558,8 @@ async def update_template(
                 "check_id": f"check_{uuid.uuid4().hex[:8]}",
                 "text": item.text,
                 "check_type": item.check_type,
-                "options": item.options if item.check_type == "multiple_choice" else None
+                "options": item.options if item.check_type == "multiple_choice" else None,
+                "default_response": item.default_response
             })
         update_data["check_items"] = check_items
     

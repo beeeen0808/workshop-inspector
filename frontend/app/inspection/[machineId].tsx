@@ -57,6 +57,19 @@ export default function InspectionForm() {
         t => t.category === machineData.category || t.category === 'general'
       );
       
+      // Check if machine has a default template
+      if (machineData.default_template_id) {
+        const defaultTemplate = templatesData.find(
+          t => t.template_id === machineData.default_template_id
+        );
+        if (defaultTemplate) {
+          // Auto-select default template with pre-filled default answers
+          selectTemplateWithDefaults(defaultTemplate);
+          return;
+        }
+      }
+      
+      // Otherwise show template selection modal
       if (relevantTemplates.length > 0) {
         setShowTemplateModal(true);
       }
@@ -68,6 +81,21 @@ export default function InspectionForm() {
     }
   };
 
+  const selectTemplateWithDefaults = (template: ChecklistTemplate) => {
+    setSelectedTemplate(template);
+    setCheckResponses(
+      template.check_items.map(item => ({
+        check_id: item.check_id,
+        text: item.text,
+        check_type: item.check_type,
+        options: item.options,
+        // Pre-fill with default response if available
+        response: (item as any).default_response || undefined,
+      }))
+    );
+    setLoading(false);
+  };
+
   const selectTemplate = (template: ChecklistTemplate) => {
     setSelectedTemplate(template);
     setCheckResponses(
@@ -76,7 +104,8 @@ export default function InspectionForm() {
         text: item.text,
         check_type: item.check_type,
         options: item.options,
-        response: undefined,
+        // Pre-fill with default response if available
+        response: (item as any).default_response || undefined,
       }))
     );
     setShowTemplateModal(false);
