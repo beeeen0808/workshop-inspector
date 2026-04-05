@@ -264,33 +264,20 @@ export default function MachineDetail() {
           Alert.alert('Error', 'Please allow pop-ups to export PDF');
         }
       } else {
-        // For mobile: Use expo-print and expo-sharing
-        const { uri } = await Print.printToFileAsync({
-          html,
-          base64: false,
-        });
-
-        const fileName = `${machine.name.replace(/[^a-zA-Z0-9]/g, '_')}_All_Inspections_${new Date().toISOString().split('T')[0]}.pdf`;
-        const newUri = `${FileSystem.documentDirectory}${fileName}`;
+        // For mobile: Use Print.printAsync which is more reliable in Expo Go
+        // This opens the native print dialog where user can "Save as PDF" or print
+        console.log('Opening print dialog for all inspections...');
         
-        await FileSystem.moveAsync({
-          from: uri,
-          to: newUri,
+        await Print.printAsync({
+          html,
         });
-
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(newUri, {
-            mimeType: 'application/pdf',
-            dialogTitle: 'Export All Inspections',
-            UTI: 'com.adobe.pdf',
-          });
-        } else {
-          Alert.alert('Success', `PDF saved to: ${newUri}`);
-        }
+        
+        console.log('Print dialog completed');
       }
     } catch (error) {
-      console.log('Export error:', error);
-      Alert.alert('Error', 'Could not export PDF. Please try again.');
+      console.error('Export error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      Alert.alert('Export Error', `Could not export: ${errorMessage}`);
     } finally {
       setExporting(false);
     }
