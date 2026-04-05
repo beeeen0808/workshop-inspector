@@ -8,11 +8,15 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 import { inspectionApi } from '../../src/services/api';
 import { Inspection } from '../../src/types';
 
@@ -21,6 +25,7 @@ export default function InspectionDetail() {
   const router = useRouter();
   const [inspection, setInspection] = useState<Inspection | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [playingVoice, setPlayingVoice] = useState<number | null>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
 
@@ -84,6 +89,15 @@ export default function InspectionDetail() {
     });
   };
 
+  const formatDateShort = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
   const getPassCount = () => {
     if (!inspection) return { pass: 0, total: 0 };
     const pass = inspection.check_responses.filter(
@@ -97,6 +111,194 @@ export default function InspectionDetail() {
     if (response === 'yes' || response === 'Good') return '#10b981';
     if (response === 'no' || response === 'Poor' || response === 'Damaged') return '#ef4444';
     return '#f59e0b';
+  };
+
+  const generatePDFHtml = () => {
+    if (!inspection) return '';
+
+    const { pass, total } = getPassCount();
+    const passRate = total > 0 ? (pass / total) * 100 : 0;
+    const overallColor = passRate >= 80 ? '#10b981' : passRate >= 50 ? '#f59e0b' : '#ef4444';
+
+    const checkResultsHtml = inspection.check_responses.map((check, index) => {
+      const statusColor = getStatusColor(check.response);
+      const statusIcon = check.response === 'yes' || check.response === 'Good' 
+        ? '✓' 
+        : check.response === 'no' || check.response === 'Poor' 
+        ? '✗' 
+        : '—';
+      
+      return `
+        <tr>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">${index + 1}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">${check.text}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: center;">
+            <span style="display: inline-block; width: 28px; height: 28px; line-height: 28px; border-radius: 50%; background-color: ${statusColor}20; color: ${statusColor}; font-weight: bold;">
+              ${statusIcon}
+            </span>
+          </td>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: ${statusColor}; font-weight: 500; text-transform: capitalize;">
+            ${check.response || 'Not answered'}
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    const photosHtml = inspection.photo_notes && inspection.photo_notes.length > 0
+      ? `
+        <div style="margin-top: 30px;">
+          <h3 style="color: #334155; font-size: 16px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.5px;">Photos (${inspection.photo_notes.length})</h3>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+            ${inspection.photo_notes.map((photo, i) => `
+              <img src="${photo}" style="width: 200px; height: 150px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0;" alt="Photo ${i + 1}" />
+            `).join('')}
+          </div>
+        </div>
+      `
+      : '';
+
+    const voiceNotesHtml = inspection.voice_notes && inspection.voice_notes.length > 0
+      ? `
+        <div style="margin-top: 30px;">
+          <h3 style="color: #334155; font-size: 16px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.5px;">Voice Notes</h3>
+          <p style="color: #64748b;">${inspection.voice_notes.length} voice note(s) recorded (audio files attached separately)</p>
+        </div>
+      `
+      : '';
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Inspection Report - ${inspection.machine_name}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1e293b; line-height: 1.5; padding: 40px; }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 2px solid #e2e8f0; }
+            .logo { font-size: 24px; font-weight: bold; color: #3b82f6; }
+            .report-title { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; }
+            .score-badge { padding: 12px 20px; border-radius: 12px; text-align: center; }
+            .score-text { font-size: 28px; font-weight: bold; }
+            .score-label { font-size: 12px; color: #64748b; }
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+            .info-card { background: #f8fafc; padding: 16px; border-radius: 8px; }
+            .info-label { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+            .info-value { font-size: 16px; font-weight: 500; color: #1e293b; }
+            table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+            th { background: #f1f5f9; padding: 12px; text-align: left; font-size: 12px; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; }
+            .notes-box { background: #f8fafc; padding: 20px; border-radius: 8px; margin-top: 30px; }
+            .notes-title { font-size: 16px; font-weight: 600; color: #334155; margin-bottom: 10px; }
+            .notes-text { color: #475569; white-space: pre-wrap; }
+            .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; text-align: center; color: #94a3b8; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <div class="logo">🔧 Machine Inspector</div>
+              <div class="report-title">Inspection Report</div>
+            </div>
+            <div class="score-badge" style="background-color: ${overallColor}20;">
+              <div class="score-text" style="color: ${overallColor};">${Math.round(passRate)}%</div>
+              <div class="score-label">Pass Rate</div>
+            </div>
+          </div>
+
+          <div class="info-grid">
+            <div class="info-card">
+              <div class="info-label">Machine</div>
+              <div class="info-value">${inspection.machine_name}</div>
+            </div>
+            <div class="info-card">
+              <div class="info-label">Checklist Used</div>
+              <div class="info-value">${inspection.template_name || 'Custom Inspection'}</div>
+            </div>
+            <div class="info-card">
+              <div class="info-label">Inspector</div>
+              <div class="info-value">${inspection.inspector_name}</div>
+            </div>
+            <div class="info-card">
+              <div class="info-label">Date & Time</div>
+              <div class="info-value">${formatDate(inspection.created_at)}</div>
+            </div>
+          </div>
+
+          ${inspection.check_responses.length > 0 ? `
+            <h3 style="color: #334155; font-size: 16px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.5px;">Check Results (${pass}/${total} Passed)</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 50px;">#</th>
+                  <th>Check Item</th>
+                  <th style="width: 80px; text-align: center;">Status</th>
+                  <th style="width: 120px;">Response</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${checkResultsHtml}
+              </tbody>
+            </table>
+          ` : ''}
+
+          ${inspection.text_notes ? `
+            <div class="notes-box">
+              <div class="notes-title">Inspector Notes</div>
+              <div class="notes-text">${inspection.text_notes}</div>
+            </div>
+          ` : ''}
+
+          ${photosHtml}
+          ${voiceNotesHtml}
+
+          <div class="footer">
+            <p>Generated on ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+            <p>Machine Inspector - School Workshop Safety</p>
+          </div>
+        </body>
+      </html>
+    `;
+  };
+
+  const exportPDF = async () => {
+    if (!inspection) return;
+
+    setExporting(true);
+    try {
+      const html = generatePDFHtml();
+      
+      // Generate PDF
+      const { uri } = await Print.printToFileAsync({
+        html,
+        base64: false,
+      });
+
+      // Create a better filename
+      const fileName = `Inspection_${inspection.machine_name.replace(/[^a-zA-Z0-9]/g, '_')}_${formatDateShort(inspection.created_at).replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+      
+      // Move to a better location with proper name
+      const newUri = `${FileSystem.documentDirectory}${fileName}`;
+      await FileSystem.moveAsync({
+        from: uri,
+        to: newUri,
+      });
+
+      // Check if sharing is available
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(newUri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Export Inspection Report',
+          UTI: 'com.adobe.pdf',
+        });
+      } else {
+        Alert.alert('Success', `PDF saved to: ${newUri}`);
+      }
+    } catch (error) {
+      console.log('Export error:', error);
+      Alert.alert('Error', 'Could not export PDF. Please try again.');
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (loading) {
@@ -122,7 +324,17 @@ export default function InspectionDetail() {
           <Ionicons name="arrow-back" size={24} color="#f8fafc" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Inspection Report</Text>
-        <View style={styles.placeholder} />
+        <TouchableOpacity 
+          style={styles.exportButton} 
+          onPress={exportPDF}
+          disabled={exporting}
+        >
+          {exporting ? (
+            <ActivityIndicator size="small" color="#3b82f6" />
+          ) : (
+            <Ionicons name="download-outline" size={22} color="#3b82f6" />
+          )}
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -162,6 +374,24 @@ export default function InspectionDetail() {
             </View>
           )}
         </View>
+
+        {/* Export Button */}
+        <TouchableOpacity 
+          style={styles.exportCardButton} 
+          onPress={exportPDF}
+          disabled={exporting}
+        >
+          <Ionicons name="document-text-outline" size={22} color="#3b82f6" />
+          <View style={styles.exportCardContent}>
+            <Text style={styles.exportCardTitle}>Export Report</Text>
+            <Text style={styles.exportCardSubtitle}>Download as PDF</Text>
+          </View>
+          {exporting ? (
+            <ActivityIndicator size="small" color="#3b82f6" />
+          ) : (
+            <Ionicons name="download-outline" size={22} color="#3b82f6" />
+          )}
+        </TouchableOpacity>
 
         {/* Check Responses */}
         {inspection.check_responses.length > 0 && (
@@ -282,8 +512,11 @@ const styles = StyleSheet.create({
     color: '#f8fafc',
     textAlign: 'center',
   },
-  placeholder: {
+  exportButton: {
     width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   content: {
     padding: 20,
@@ -292,7 +525,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1e293b',
     borderRadius: 16,
     padding: 20,
-    marginBottom: 24,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#334155',
   },
@@ -352,6 +585,30 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginTop: 8,
     textAlign: 'center',
+  },
+  exportCardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  exportCardContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  exportCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#f8fafc',
+  },
+  exportCardSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 2,
   },
   section: {
     marginBottom: 24,
