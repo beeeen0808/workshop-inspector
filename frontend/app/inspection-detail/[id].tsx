@@ -26,6 +26,7 @@ export default function InspectionDetail() {
   const [inspection, setInspection] = useState<Inspection | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [playingVoice, setPlayingVoice] = useState<number | null>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
 
@@ -48,6 +49,32 @@ export default function InspectionDetail() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Inspection',
+      'Are you sure you want to delete this inspection? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              await inspectionApi.delete(id!);
+              Alert.alert('Success', 'Inspection deleted', [
+                { text: 'OK', onPress: () => router.back() }
+              ]);
+            } catch (error) {
+              Alert.alert('Error', 'Could not delete inspection');
+              setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const playVoiceNote = async (index: number) => {
@@ -324,17 +351,30 @@ export default function InspectionDetail() {
           <Ionicons name="arrow-back" size={24} color="#f8fafc" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Inspection Report</Text>
-        <TouchableOpacity 
-          style={styles.exportButton} 
-          onPress={exportPDF}
-          disabled={exporting}
-        >
-          {exporting ? (
-            <ActivityIndicator size="small" color="#3b82f6" />
-          ) : (
-            <Ionicons name="download-outline" size={22} color="#3b82f6" />
-          )}
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity 
+            style={styles.headerButton} 
+            onPress={exportPDF}
+            disabled={exporting}
+          >
+            {exporting ? (
+              <ActivityIndicator size="small" color="#3b82f6" />
+            ) : (
+              <Ionicons name="download-outline" size={22} color="#3b82f6" />
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.headerButton} 
+            onPress={handleDelete}
+            disabled={deleting}
+          >
+            {deleting ? (
+              <ActivityIndicator size="small" color="#ef4444" />
+            ) : (
+              <Ionicons name="trash-outline" size={22} color="#ef4444" />
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -512,8 +552,13 @@ const styles = StyleSheet.create({
     color: '#f8fafc',
     textAlign: 'center',
   },
-  exportButton: {
-    width: 44,
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  headerButton: {
+    width: 40,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',

@@ -203,4 +203,13 @@ export const inspectionApi = {
     if (!response.ok) throw new Error('Failed to create inspection');
     return response.json();
   },
+
+  delete: async (inspectionId: string): Promise<void> => {
+    const response = await fetch(`${API_URL}/api/inspections/${inspectionId}`, {
+      method: 'DELETE',
+      headers: await getHeaders(),
+      credentials: 'include',
+    });
+    if (!response.ok) throw new Error('Failed to delete inspection');
+  },
 };

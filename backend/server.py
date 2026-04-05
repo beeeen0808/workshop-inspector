@@ -646,6 +646,22 @@ async def get_machine_inspections(
     
     return [InspectionResponse(**i) for i in inspections]
 
+@api_router.delete("/inspections/{inspection_id}")
+async def delete_inspection(
+    inspection_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete an inspection record"""
+    inspection = await db.inspections.find_one({"inspection_id": inspection_id})
+    if not inspection:
+        raise HTTPException(status_code=404, detail="Inspection not found")
+    
+    result = await db.inspections.delete_one({"inspection_id": inspection_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Inspection not found")
+    
+    return {"message": "Inspection deleted successfully"}
+
 # ==================== SEED DATA ====================
 
 @api_router.post("/seed")
